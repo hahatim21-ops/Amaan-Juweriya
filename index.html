@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en" class="is-locked">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Amaan &amp; Juwairiyah — Nikah &amp; Walima</title>
+  <meta name="description" content="You are cordially invited to the Nikah &amp; Walima of Amaan &amp; Juwairiyah — 18 &amp; 20 December 2026, Mumbai." />
+  <meta name="theme-color" content="#0B1430" />
+
+  <!-- Open Graph / social share -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Amaan &amp; Juwairiyah — Nikah &amp; Walima" />
+  <meta property="og:description" content="Nikah 18 December · Walima 20 December 2026 · Mumbai. Tap to open your invitation." />
+  <meta property="og:image" content="assets/web/og-door.jpg" />
+  <meta property="og:image:width" content="630" />
+  <meta property="og:image:height" content="1119" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Amaan &amp; Juwairiyah — Nikah &amp; Walima" />
+  <meta name="twitter:image" content="assets/web/og-door.jpg" />
+
+  <link rel="icon" type="image/png" href="assets/web/favicon.png" />
+  <link rel="apple-touch-icon" href="assets/web/favicon.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
+
+  <link rel="preload" as="image" href="assets/web/door-frame.webp" />
+  <link rel="preload" as="image" href="assets/web/door-leaf-l.webp" />
+  <link rel="preload" as="image" href="assets/web/door-leaf-r.webp" />
+  <link rel="preload" as="image" href="assets/web/door-chandelier.webp" />
+  <link rel="preload" as="image" href="assets/web/v2.jpg" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Shared blurred backdrop (fills the space around the 9:16 stage) -->
+  <canvas id="backdrop" aria-hidden="true"></canvas>
+
+  <!-- ============ PAGE 1 · TAP TO OPEN ============ -->
+  <div id="door" role="button" tabindex="0" aria-label="Tap to open the invitation">
+    <div class="door-bg" aria-hidden="true"></div>
+    <div class="door-stage">
+      <div class="door-zoom">
+        <!-- sized to the cover-fitted artwork by JS; children use % of the artwork -->
+        <div class="door-scene">
+          <div class="doorway" aria-hidden="true"><span class="doorway-light"></span></div>
+          <div class="leaf leaf-l"><img src="assets/web/door-leaf-l.webp" alt="" draggable="false" /><span class="leaf-shade"></span></div>
+          <div class="leaf leaf-r"><img src="assets/web/door-leaf-r.webp" alt="" draggable="false" /><span class="leaf-shade"></span></div>
+          <img class="door-frame" src="assets/web/door-frame.webp" alt="Ornate cream and gold double doors" draggable="false" />
+          <span class="chandelier-glow" aria-hidden="true"></span>
+          <img class="chandelier" src="assets/web/door-chandelier.webp" alt="" draggable="false" />
+        </div>
+      </div>
+      <canvas class="door-sparkles" aria-hidden="true"></canvas>
+      <div class="door-cta" aria-hidden="true">
+        <span class="door-ring"></span>
+        <span class="door-ring door-ring--2"></span>
+        <span class="door-label"><span class="door-label-text">Tap to Open</span></span>
+      </div>
+    </div>
+  </div>
+  <div id="flash" aria-hidden="true"></div>
+
+  <!-- ============ THE FILM (fixed; driven by #track scroll) ============ -->
+  <main id="film" aria-label="Wedding invitation">
+    <div class="film-inner">
+
+      <!-- v2 · Invitation -->
+      <section class="scene" data-scene="0" aria-label="Invitation: Amaan and Juwairiyah">
+        <div class="stage">
+          <video class="vid" muted playsinline loop autoplay preload="auto"
+                 poster="assets/web/v2.jpg" src="assets/web/v2.mp4"></video>
+          <div class="scroll-hint" aria-hidden="true">
+            <span>Scroll</span>
+            <svg viewBox="0 0 24 24"><path d="M5 9l7 7 7-7" /></svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- v3 · Date reveal + countdown -->
+      <section class="scene" data-scene="1" aria-label="Save the date">
+        <div class="stage">
+          <video class="vid" muted playsinline loop autoplay preload="metadata"
+                 poster="assets/web/v3.jpg" data-src="assets/web/v3.mp4"></video>
+          <!-- same film without the "Scratch to reveal" line; swapped in after the reveal -->
+          <video class="vid-clean" muted playsinline loop preload="none"
+                 poster="assets/web/v3-clean.jpg" data-src="assets/web/v3-clean.mp4" aria-hidden="true"></video>
+
+          <div class="date-glow" aria-hidden="true"></div>
+          <div class="foil">
+            <canvas class="foil-canvas" role="button" tabindex="0"
+                    aria-label="Tap or scratch to reveal the date"></canvas>
+          </div>
+          <div class="foil-burst" aria-hidden="true"></div>
+
+          <div class="countdown" aria-live="polite">
+            <div class="cd-boxes">
+              <div class="cd-box"><div class="cd-num" data-unit="d"><span>00</span></div><div class="cd-lbl">Days</div></div>
+              <div class="cd-box"><div class="cd-num" data-unit="h"><span>00</span></div><div class="cd-lbl">Hours</div></div>
+              <div class="cd-box"><div class="cd-num" data-unit="m"><span>00</span></div><div class="cd-lbl">Minutes</div></div>
+              <div class="cd-box"><div class="cd-num" data-unit="s"><span>00</span></div><div class="cd-lbl">Seconds</div></div>
+            </div>
+            <p class="cd-done">Alhamdulillah — the day is here</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- v4 · Nikah -->
+      <section class="scene" data-scene="2" aria-label="Nikah details">
+        <div class="stage">
+          <video class="vid" muted playsinline loop autoplay preload="metadata"
+                 poster="assets/web/v4.jpg" data-src="assets/web/v4.mp4"></video>
+          <a class="map-btn" data-map="nikah" target="_blank" rel="noopener">
+            <span class="map-ico" aria-hidden="true">📍</span> Tap for Location
+          </a>
+        </div>
+      </section>
+
+      <!-- v5 · Walima -->
+      <section class="scene" data-scene="3" aria-label="Walima details">
+        <div class="stage">
+          <video class="vid" muted playsinline loop autoplay preload="metadata"
+                 poster="assets/web/v5.jpg" data-src="assets/web/v5.mp4"></video>
+          <a class="map-btn" data-map="walima" target="_blank" rel="noopener">
+            <span class="map-ico" aria-hidden="true">📍</span> Tap for Location
+          </a>
+        </div>
+      </section>
+
+      <!-- v6 · Blessings / ending -->
+      <section class="scene" data-scene="4" aria-label="Blessings">
+        <div class="stage">
+          <video class="vid" muted playsinline loop autoplay preload="metadata"
+                 poster="assets/web/v6.jpg" data-src="assets/web/v6.mp4"></video>
+          <div class="ending">
+            <button class="replay" type="button">Replay <span aria-hidden="true">↺</span></button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Scroll length for the film -->
+  <div id="track" aria-hidden="true"></div>
+
+  <!-- UI chrome -->
+  <div id="progress" aria-hidden="true"><span></span></div>
+  <button id="music" type="button" aria-label="Pause music" aria-pressed="true">
+    <svg class="ico-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l11-2v12" /><circle cx="6.5" cy="18" r="2.5" /><circle cx="17.5" cy="16" r="2.5" /></svg>
+    <svg class="ico-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l11-2v12" /><circle cx="6.5" cy="18" r="2.5" /><circle cx="17.5" cy="16" r="2.5" /><path d="M3 3l18 18" /></svg>
+  </button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

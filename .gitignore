@@ -1,0 +1,7 @@
+# local tooling
+.claude/
+.vercel/
+# original full-size masters (the site uses assets/web/)
+assets/*.MP4
+assets/*.PNG
+assets/*.mp3
