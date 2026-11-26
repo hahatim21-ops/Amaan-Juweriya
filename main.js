@@ -109,7 +109,10 @@
       const vis = visH > 1;
       const cover = visH / Math.min(vh, r.height); // how much of it is on screen
       const current = cover >= 0.55;
-      if (r.top < vh * 2.2) ensureLoaded(i); // lazy-load as it approaches
+      if (r.top < vh * 2.2) { // lazy-load as it approaches
+        ensureLoaded(i);
+        if (videos[i].preload !== 'auto') videos[i].preload = 'auto';
+      }
       if (pagesLive) {
         const st = vstate[i];
         if (!vis) {
@@ -231,6 +234,30 @@
   layoutDoor();
   if (reduced) renderSparkles(0); else sparkRAF = requestAnimationFrame(renderSparkles);
 
+  // iOS (notably Low Power Mode) only lets a video play if it was first
+  // started from a tap. Start every video once inside the door tap, then
+  // park it on frame one; from then on JS may play it whenever we like.
+  function unlockVideos() {
+    const all = videos.map((v, i) => [v, i]).concat([[cleanVid, -1]]);
+    all.forEach(([v, i]) => {
+      if (i > 0 && !vstate[i].loaded) {
+        vstate[i].loaded = true;
+        v.autoplay = false;
+        v.preload = 'metadata';
+        v.src = v.dataset.src;
+      }
+      if (i === -1 && !v.src) { v.preload = 'metadata'; v.src = v.dataset.src; }
+      if (i === 0) return; // v2 is handled by the door sequence
+      const p = v.play();
+      if (p && p.then) {
+        p.then(() => {
+          const wanted = i > 0 && pagesLive && vstate[i].current;
+          if (!wanted && !(i === -1 && cleanSwapped)) { v.pause(); try { v.currentTime = 0; } catch (e) {} }
+        }).catch(() => {});
+      }
+    });
+  }
+
   // --- opening ---
   let opened = false;
   function openDoor() {
@@ -245,8 +272,15 @@
     if (unlock && unlock.then) unlock.then(() => { if (!pagesLive) { v2.pause(); rewind(0); } }).catch(() => {});
     v2.pause();
     rewind(0);
-    ensureLoaded(1);
-    const goLive = () => { pagesLive = true; vstate[0].current = false; syncPages(); };
+    unlockVideos();
+    const goLive = () => {
+      pagesLive = true;
+      vstate[0].current = false;
+      syncPages();
+      const tc = document.querySelector('meta[name="theme-color"]');
+      if (tc) tc.setAttribute('content', '#0B1430');
+      root.classList.add('is-inside');
+    };
 
     const tlo = gsap.timeline({ onComplete: afterOpen });
     if (reduced) {
@@ -373,6 +407,13 @@
     }
   });
 
+  const retryPlayback = () => {
+    if (!pagesLive) return;
+    vstate.forEach((st, i) => { if (st.current && videos[i].paused) playVideo(i); });
+  };
+  document.addEventListener('touchend', retryPlayback, { passive: true });
+  document.addEventListener('click', retryPlayback);
+
   /* ==========================================================
      SCROLL HINT
      ========================================================== */
@@ -385,218 +426,69 @@
   window.addEventListener('scroll', onFirstScroll, { passive: true });
 
   /* ==========================================================
-     DATE FOIL — tap or scratch to reveal (v3)
+     DATE REVEAL (v3) — a velvet ribbon held by a gold wax seal.
+     Tap the seal (or swipe the ribbon): the seal breaks away in a
+     burst of gold and the ribbon parts like the doors, revealing
+     the date underneath.
      ========================================================== */
   const scene3 = scenes[1];
-  const foilWrap = $('.foil', scene3);
-  const fc = $('.foil-canvas', scene3);
-  const fctx = fc.getContext('2d');
+  const sealBand = $('.seal-band', scene3);
+  const ribbonL = $('.ribbon-l', scene3);
+  const ribbonR = $('.ribbon-r', scene3);
+  const seal = $('.seal', scene3);
   const burstBox = $('.foil-burst', scene3);
   const dateGlow = $('.date-glow', scene3);
   const countdown = $('.countdown', scene3);
-  let foilBase = null, foilMask = null, mctx = null, fW = 0, fH = 0, fDpr = 1;
   let revealed = false;
-  const shim = { v: 0 };
 
-  function buildFoil() {
-    const r = fc.getBoundingClientRect();
-    if (!r.width || !r.height) return;
-    fDpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = Math.round(r.width * fDpr), h = Math.round(r.height * fDpr);
-    const keepMask = foilMask && foilMask.width === w && foilMask.height === h;
-    fW = w; fH = h;
-    fc.width = w; fc.height = h;
-
-    // ---- base foil ----
-    foilBase = document.createElement('canvas');
-    foilBase.width = w; foilBase.height = h;
-    const g = foilBase.getContext('2d');
-    const vg = g.createLinearGradient(0, 0, 0, h);
-    vg.addColorStop(0, '#8A6619');
-    vg.addColorStop(0.16, '#D4AF37');
-    vg.addColorStop(0.4, '#F7E9B0');
-    vg.addColorStop(0.55, '#E8CF73');
-    vg.addColorStop(0.82, '#B98B29');
-    vg.addColorStop(1, '#7A5A14');
-    g.fillStyle = vg;
-    g.fillRect(0, 0, w, h);
-    // horizontal brushed variation
-    const hg = g.createLinearGradient(0, 0, w, 0);
-    hg.addColorStop(0, 'rgba(91,14,20,.18)');
-    hg.addColorStop(0.3, 'rgba(255,250,220,.12)');
-    hg.addColorStop(0.5, 'rgba(91,14,20,.06)');
-    hg.addColorStop(0.72, 'rgba(255,250,220,.16)');
-    hg.addColorStop(1, 'rgba(91,14,20,.18)');
-    g.fillStyle = hg;
-    g.fillRect(0, 0, w, h);
-    // embossed grain
-    const img = g.getImageData(0, 0, w, h);
-    const d = img.data;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const k = (y * w + x) * 4;
-        const n = (Math.random() - 0.5) * 22 + Math.sin((x + y) * 0.9) * 4;
-        d[k] += n; d[k + 1] += n; d[k + 2] += n * 0.7;
-      }
-    }
-    g.putImageData(img, 0, 0);
-    // bevel edges
-    const lw = Math.max(1, fDpr);
-    g.fillStyle = 'rgba(255,248,215,.75)'; g.fillRect(0, lw * 2, w, lw);
-    g.fillStyle = 'rgba(91,14,20,.45)'; g.fillRect(0, h - lw * 3, w, lw);
-    g.fillStyle = 'rgba(60,8,14,.35)'; g.fillRect(0, 0, w, lw); g.fillRect(0, h - lw, w, lw);
-    // label
-    const fs = Math.round(h * 0.34);
-    g.font = `700 ${fs}px Cinzel, "Times New Roman", serif`;
-    if ('letterSpacing' in g) g.letterSpacing = `${Math.round(fs * 0.16)}px`;
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    const label = '✦  Tap to Reveal  ✦';
-    const cx = w / 2, cy = h / 2 + fs * 0.04;
-    g.fillStyle = 'rgba(255,250,225,.75)';
-    g.fillText(label, cx + lw * 0.5, cy + lw * 1.2); // highlight (emboss)
-    g.fillStyle = 'rgba(40,5,9,.35)';
-    g.fillText(label, cx - lw * 0.5, cy - lw * 0.8); // shade
-    g.fillStyle = '#5B0E14';
-    g.fillText(label, cx, cy);
-
-    // ---- scratch mask ----
-    if (!keepMask) {
-      foilMask = document.createElement('canvas');
-      foilMask.width = w; foilMask.height = h;
-      mctx = foilMask.getContext('2d', { willReadFrequently: true });
-      mctx.fillStyle = '#000';
-      mctx.fillRect(0, 0, w, h);
-    }
-    renderFoil(performance.now());
-  }
-
-  function renderFoil(now) {
-    if (!foilBase) return;
-    const w = fW, h = fH;
-    fctx.globalCompositeOperation = 'source-over';
-    fctx.globalAlpha = 1;
-    fctx.clearRect(0, 0, w, h);
-    fctx.drawImage(foilBase, 0, 0);
-    // moving sheen
-    fctx.globalCompositeOperation = 'source-atop';
-    const period = 3200;
-    const p = reduced ? 0.5 : ((now % period) / period) * 1.8 - 0.4;
-    const sx = p * w, sw = w * 0.22;
-    const sg = fctx.createLinearGradient(sx - sw, 0, sx + sw, h * 0.6);
-    sg.addColorStop(0, 'rgba(255,255,240,0)');
-    sg.addColorStop(0.5, 'rgba(255,255,240,.55)');
-    sg.addColorStop(1, 'rgba(255,255,240,0)');
-    fctx.fillStyle = sg;
-    fctx.fillRect(0, 0, w, h);
-    // reveal shimmer: bright fast sweep + glow
-    if (shim.v > 0) {
-      const qx = shim.v * w * 1.4 - w * 0.2;
-      const qg = fctx.createLinearGradient(qx - w * 0.3, 0, qx + w * 0.3, 0);
-      qg.addColorStop(0, 'rgba(255,255,245,0)');
-      qg.addColorStop(0.5, 'rgba(255,255,245,.9)');
-      qg.addColorStop(1, 'rgba(255,255,245,0)');
-      fctx.fillStyle = qg;
-      fctx.fillRect(0, 0, w, h);
-      fctx.fillStyle = `rgba(255,248,220,${0.3 * shim.v})`;
-      fctx.fillRect(0, 0, w, h);
-    }
-    // apply scratch mask
-    fctx.globalCompositeOperation = 'destination-in';
-    fctx.drawImage(foilMask, 0, 0);
-    fctx.globalCompositeOperation = 'source-over';
-  }
-
-  gsap.ticker.add(() => {
-    if (!foilBase || foilWrap.classList.contains('is-gone')) return;
-    if (!vstate[1].visible) return;
-    renderFoil(performance.now());
-  });
-
-  // pointer: tap → reveal, drag → scratch
-  let fDown = false, fMoved = 0, fLast = null, scratching = false, lastCheck = 0;
-  const brush = () => Math.max(18, fH * 0.42);
-  function fPoint(e) {
-    const r = fc.getBoundingClientRect();
-    return { x: ((e.clientX - r.left) / r.width) * fW, y: ((e.clientY - r.top) / r.height) * fH };
-  }
-  function scratchLine(a, b) {
-    mctx.globalCompositeOperation = 'destination-out';
-    mctx.lineCap = 'round';
-    mctx.lineJoin = 'round';
-    mctx.lineWidth = brush();
-    mctx.beginPath();
-    mctx.moveTo(a.x, a.y);
-    mctx.lineTo(b.x, b.y);
-    mctx.stroke();
-  }
-  function clearedRatio() {
-    const { data } = mctx.getImageData(0, 0, fW, fH);
-    let clear = 0, total = 0;
-    for (let k = 3; k < data.length; k += 4 * 8) { total++; if (data[k] < 128) clear++; }
-    return total ? clear / total : 0;
-  }
-  fc.addEventListener('pointerdown', (e) => {
+  // tap → reveal; a horizontal swipe across the ribbon also opens it
+  let sDown = null;
+  sealBand.addEventListener('pointerdown', (e) => {
     if (revealed) return;
-    fDown = true; fMoved = 0; scratching = false;
-    fLast = fPoint(e);
-    try { fc.setPointerCapture(e.pointerId); } catch (_) {}
+    sDown = { x: e.clientX, y: e.clientY };
   });
-  fc.addEventListener('pointermove', (e) => {
-    if (!fDown || revealed) return;
-    const p = fPoint(e);
-    const dist = Math.hypot(p.x - fLast.x, p.y - fLast.y) / fDpr;
-    fMoved += dist;
-    if (fMoved > 8) {
-      scratching = true;
-      scratchLine(fLast, p);
-      const now = performance.now();
-      if (now - lastCheck > 120) {
-        lastCheck = now;
-        if (clearedRatio() >= 0.5) reveal();
-      }
-    }
-    fLast = p;
+  sealBand.addEventListener('pointermove', (e) => {
+    if (!sDown || revealed) return;
+    if (Math.abs(e.clientX - sDown.x) > 28) { sDown = null; reveal(); }
   });
-  const endPointer = () => {
-    if (!fDown) return;
-    fDown = false;
-    if (revealed) return;
-    if (!scratching) reveal();
-    else if (clearedRatio() >= 0.5) reveal();
-  };
-  fc.addEventListener('pointerup', endPointer);
-  fc.addEventListener('pointercancel', () => { fDown = false; });
-  fc.addEventListener('keydown', (e) => {
+  sealBand.addEventListener('pointerup', (e) => {
+    if (!sDown || revealed) return;
+    const moved = Math.hypot(e.clientX - sDown.x, e.clientY - sDown.y);
+    sDown = null;
+    if (moved < 14) reveal(); // a tap, not a scroll
+  });
+  sealBand.addEventListener('pointercancel', () => { sDown = null; });
+  sealBand.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); reveal(); }
   });
 
   function burst() {
     if (reduced) return;
     const r = burstBox.getBoundingClientRect();
-    const n = 54;
+    const cx = r.width / 2, cy = r.height / 2;
     const frag = document.createDocumentFragment();
     const parts = [];
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < 60; i++) {
       const el = document.createElement('i');
       frag.appendChild(el);
       parts.push(el);
     }
     burstBox.appendChild(frag);
-    parts.forEach((el) => {
-      const x0 = Math.random() * r.width;
-      const y0 = r.height * (0.2 + Math.random() * 0.6);
+    parts.forEach((el, i) => {
+      // most of the gold dust bursts from the seal, the rest along the parting ribbon
+      const fromSeal = i < 38;
+      const x0 = fromSeal ? cx + (Math.random() - 0.5) * r.height * 0.6 : Math.random() * r.width;
+      const y0 = fromSeal ? cy + (Math.random() - 0.5) * r.height * 0.6 : r.height * (0.25 + Math.random() * 0.5);
       const ang = Math.random() * Math.PI * 2;
-      const dist = 30 + Math.random() * r.width * 0.32;
-      const size = 0.6 + Math.random() * 1.8;
+      const dist = (fromSeal ? 40 : 20) + Math.random() * r.width * (fromSeal ? 0.3 : 0.12);
       gsap.fromTo(el,
-        { x: x0, y: y0, scale: size, opacity: 1 },
+        { x: x0, y: y0, scale: 0.6 + Math.random() * 1.8, opacity: 1 },
         {
           x: x0 + Math.cos(ang) * dist,
-          y: y0 + Math.sin(ang) * dist * 0.75 - 10,
+          y: y0 + Math.sin(ang) * dist * 0.7 - 8,
           scale: 0,
           opacity: 0,
-          duration: 0.9 + Math.random() * 0.7,
+          duration: 0.9 + Math.random() * 0.8,
           ease: 'power2.out',
           onComplete: () => el.remove(),
         });
@@ -608,8 +500,8 @@
   const cleanVid = $('.vid-clean', scene3);
   let cleanSwapped = false;
   function preloadClean() {
-    if (cleanVid.src) return;
     cleanVid.preload = 'auto';
+    if (cleanVid.src) return;
     cleanVid.src = cleanVid.dataset.src;
     cleanVid.load();
   }
@@ -626,7 +518,7 @@
           onComplete: () => {
             orig.pause();
             orig.style.visibility = 'hidden';
-            videos[1] = cleanVid; // playback, backdrop & veil now follow the clean copy
+            videos[1] = cleanVid; // playback now follows the clean copy
           },
         });
       };
@@ -643,26 +535,31 @@
   function reveal() {
     if (revealed) return;
     revealed = true;
-    fDown = false;
     scene3.classList.add('revealed');
     swapToClean();
-    fc.setAttribute('aria-label', 'Date revealed: 18 and 20 December 2026');
+    sealBand.setAttribute('aria-label', 'Date revealed: 18 and 20 December 2026');
+    const done = () => sealBand.classList.add('is-gone');
     const tlr = gsap.timeline();
     if (reduced) {
-      tlr.to(fc, { autoAlpha: 0, duration: 0.6 })
-        .add(() => foilWrap.classList.add('is-gone'))
+      tlr.to(sealBand, { autoAlpha: 0, duration: 0.6 })
+        .add(done)
         .to(dateGlow, { opacity: 0.8, duration: 0.8 }, 0.2)
         .add(showCountdown, 0.5);
       return;
     }
     tlr
-      .to(shim, { v: 1, duration: 0.42, ease: 'power2.in' })
-      .add(burst, 0.38)
-      .to(fc, { scale: 1.08, autoAlpha: 0, duration: 0.6, ease: 'power2.out' }, 0.4)
-      .add(() => foilWrap.classList.add('is-gone'), 1.0)
+      // the seal swells, then breaks away in a burst of gold
+      .to(seal, { scale: 1.18, duration: 0.22, ease: 'power2.out' })
+      .add(burst, 0.2)
+      .to(seal, { scale: 0.2, rotation: 35, autoAlpha: 0, duration: 0.45, ease: 'power2.in' }, 0.22)
+      // the ribbon parts like the doors
+      .to(ribbonL, { xPercent: -104, duration: 1.05, ease: 'power3.inOut' }, 0.3)
+      .to(ribbonR, { xPercent: 104, duration: 1.05, ease: 'power3.inOut' }, 0.3)
+      .to([ribbonL, ribbonR], { autoAlpha: 0, duration: 0.35, ease: 'power1.in' }, 1.0)
+      .add(done, 1.4)
       .fromTo(dateGlow, { opacity: 0 }, { opacity: 0.85, duration: 1.1, ease: 'power1.out' }, 0.55)
       .add(() => gsap.set(dateGlow, { clearProps: 'opacity' }), 1.7)
-      .add(showCountdown, 0.9);
+      .add(showCountdown, 1.0);
   }
 
   /* ==========================================================
@@ -747,7 +644,6 @@
     rzT = setTimeout(() => {
       layoutDoor();
       syncPages();
-      buildFoil();
     }, 120);
   });
 
@@ -755,8 +651,7 @@
   const fontsReady = document.fonts && document.fonts.load
     ? Promise.all([document.fonts.load('700 20px Cinzel'), document.fonts.ready]).catch(() => {})
     : Promise.resolve();
-  buildFoil();
-  fontsReady.then(() => { buildFoil(); layoutDoor(); });
+  fontsReady.then(() => { layoutDoor(); });
 
   syncPages();
 

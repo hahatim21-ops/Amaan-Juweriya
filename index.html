@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Amaan &amp; Juwairiyah — Nikah &amp; Walima</title>
   <meta name="description" content="You are cordially invited to the Nikah &amp; Walima of Amaan &amp; Juwairiyah — 18 &amp; 20 December 2026, Mumbai." />
-  <meta name="theme-color" content="#0B1430" />
+  <meta name="theme-color" content="#3C080E" />
 
   <!-- Open Graph / social share -->
   <meta property="og:type" content="website" />
@@ -30,7 +30,7 @@
   <link rel="preload" as="image" href="assets/web/door-leaf-l.webp" />
   <link rel="preload" as="image" href="assets/web/door-leaf-r.webp" />
   <link rel="preload" as="image" href="assets/web/door-chandelier.webp" />
-  <link rel="preload" as="image" href="assets/web/v2.jpg" />
+  <link rel="preload" as="image" href="assets/web/garland-1.webp" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -76,7 +76,7 @@
       <!-- v2 · Invitation -->
       <section class="scene" data-scene="0" aria-label="Invitation: Amaan and Juwairiyah">
         <div class="stage">
-          <video class="vid" muted playsinline loop preload="auto"
+          <video class="vid" muted playsinline webkit-playsinline loop preload="auto" disablepictureinpicture disableremoteplayback x-webkit-airplay="deny" tabindex="-1"
                  poster="assets/web/v2.jpg" src="assets/web/v2.mp4"></video>
           <div class="scroll-hint" aria-hidden="true">
             <span>Scroll</span>
@@ -88,16 +88,18 @@
       <!-- v3 · Date reveal + countdown -->
       <section class="scene" data-scene="1" aria-label="Save the date">
         <div class="stage">
-          <video class="vid" muted playsinline loop autoplay preload="metadata"
+          <video class="vid" muted playsinline webkit-playsinline loop preload="metadata" disablepictureinpicture disableremoteplayback x-webkit-airplay="deny" tabindex="-1"
                  poster="assets/web/v3.jpg" data-src="assets/web/v3.mp4"></video>
           <!-- same film without the "Scratch to reveal" line; swapped in after the reveal -->
-          <video class="vid-clean" muted playsinline loop preload="none"
+          <video class="vid-clean" muted playsinline webkit-playsinline loop preload="none" disablepictureinpicture disableremoteplayback x-webkit-airplay="deny" tabindex="-1"
                  poster="assets/web/v3-clean.jpg" data-src="assets/web/v3-clean.mp4" aria-hidden="true"></video>
 
           <div class="date-glow" aria-hidden="true"></div>
-          <div class="foil">
-            <canvas class="foil-canvas" role="button" tabindex="0"
-                    aria-label="Tap or scratch to reveal the date"></canvas>
+          <!-- velvet ribbon held by a gold wax seal; tap the seal to reveal the date -->
+          <div class="seal-band" role="button" tabindex="0" aria-label="Tap the seal to reveal the date">
+            <div class="ribbon ribbon-l"><span class="ribbon-text">Tap the seal</span></div>
+            <div class="ribbon ribbon-r"><span class="ribbon-text">to reveal</span></div>
+            <div class="seal"><span class="seal-ring" aria-hidden="true"></span><img src="assets/web/seal.webp" alt="" draggable="false" /></div>
           </div>
           <div class="foil-burst" aria-hidden="true"></div>
 
@@ -116,7 +118,7 @@
       <!-- v4 · Nikah -->
       <section class="scene" data-scene="2" aria-label="Nikah details">
         <div class="stage">
-          <video class="vid" muted playsinline loop autoplay preload="metadata"
+          <video class="vid" muted playsinline webkit-playsinline loop preload="metadata" disablepictureinpicture disableremoteplayback x-webkit-airplay="deny" tabindex="-1"
                  poster="assets/web/v4.jpg" data-src="assets/web/v4.mp4"></video>
           <a class="map-btn" data-map="nikah" target="_blank" rel="noopener">
             <span class="map-ico" aria-hidden="true">📍</span> Tap for Location
@@ -127,7 +129,7 @@
       <!-- v5 · Walima -->
       <section class="scene" data-scene="3" aria-label="Walima details">
         <div class="stage">
-          <video class="vid" muted playsinline loop autoplay preload="metadata"
+          <video class="vid" muted playsinline webkit-playsinline loop preload="metadata" disablepictureinpicture disableremoteplayback x-webkit-airplay="deny" tabindex="-1"
                  poster="assets/web/v5.jpg" data-src="assets/web/v5.mp4"></video>
           <a class="map-btn" data-map="walima" target="_blank" rel="noopener">
             <span class="map-ico" aria-hidden="true">📍</span> Tap for Location
@@ -138,7 +140,7 @@
       <!-- v6 · Blessings / ending -->
       <section class="scene" data-scene="4" aria-label="Blessings">
         <div class="stage">
-          <video class="vid" muted playsinline loop autoplay preload="metadata"
+          <video class="vid" muted playsinline webkit-playsinline loop preload="metadata" disablepictureinpicture disableremoteplayback x-webkit-airplay="deny" tabindex="-1"
                  poster="assets/web/v6.jpg" data-src="assets/web/v6.mp4"></video>
           <div class="ending">
             <button class="replay" type="button">Replay <span aria-hidden="true">↺</span></button>
@@ -146,6 +148,11 @@
         </div>
       </section>
 
+      <!-- floral garlands over the page joins -->
+      <img class="garland" style="--k:1" src="assets/web/garland-1.webp" alt="" aria-hidden="true" decoding="async" />
+      <img class="garland" style="--k:2" src="assets/web/garland-2.webp" alt="" aria-hidden="true" decoding="async" />
+      <img class="garland" style="--k:3" src="assets/web/garland-1.webp" alt="" aria-hidden="true" decoding="async" />
+      <img class="garland garland--flip" style="--k:4" src="assets/web/garland-2.webp" alt="" aria-hidden="true" decoding="async" />
     </div>
   </main>
 
