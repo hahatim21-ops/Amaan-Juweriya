@@ -31,7 +31,8 @@
   const doorScene = $('.door-scene');
   const leafL = $('.leaf-l');
   const leafR = $('.leaf-r');
-  const doorLight = $('.doorway-light');
+  const doorBg = $('.door-bg');
+  let doorwayPt = { x: window.innerWidth / 2, y: window.innerHeight * 0.55 };
   const doorCta = $('.door-cta');
   const sparkCanvas = $('.door-sparkles');
   const flash = $('#flash');
@@ -168,6 +169,7 @@
     doorCta.style.setProperty('--ring', `${Math.round(iw * 0.15)}px`);
     const wx = ox + iw * doorwayX, wy = oy + ih * doorwayY;
     doorZoom.style.transformOrigin = `${wx}px ${wy}px`;
+    doorwayPt = { x: r.left + wx, y: r.top + wy };
     flash.style.setProperty('--fx', `${r.left + wx}px`);
     flash.style.setProperty('--fy', `${r.top + wy}px`);
     sizeSparkles();
@@ -287,23 +289,23 @@
       tlo.add(goLive, 0.3).to(door, { autoAlpha: 0, duration: 0.9, ease: 'power1.inOut' }, 0);
       return;
     }
-    gsap.set(filmInner, { scale: 1.15, transformOrigin: '50% 50%' });
+    // The real first page sits right behind the doors (held on frame one),
+    // slightly enlarged around the doorway so it settles in as we step through.
+    gsap.set(filmInner, { scale: 1.12, transformOrigin: `${doorwayPt.x}px ${doorwayPt.y}px` });
     tlo
       .to(doorCta, { autoAlpha: 0, scale: 1.25, duration: 0.4, ease: 'power2.out' }, 0)
       .to(sparkCanvas, { autoAlpha: 0, duration: 0.8 }, 0.2)
-      // 1. the doors swing open, away from us, light pours through
-      .to(leafL, { rotationY: 82, duration: 1.5, ease: 'power2.inOut' }, 0.15)
-      .to(leafR, { rotationY: -82, duration: 1.5, ease: 'power2.inOut' }, 0.15)
-      .to('.leaf-shade', { opacity: 0.75, duration: 1.5, ease: 'power1.in' }, 0.15)
-      .to(doorLight, { opacity: 1, duration: 1.2, ease: 'power1.inOut' }, 0.3)
-      // 2. we glide through the doorway
-      .to(doorZoom, { scale: 5.5, duration: 1.6, ease: 'power3.in' }, 1.05)
-      // 3. gold-white bloom, then cross-fade into v2 settling 1.15 → 1
-      .to(flash, { opacity: 1, duration: 0.45, ease: 'power1.in' }, 2.15)
-      .add(goLive, 2.5) // v2 starts from frame one just as the bloom peaks
-      .set(door, { autoAlpha: 0 }, 2.62)
-      .to(flash, { opacity: 0, duration: 0.9, ease: 'power1.out' }, 2.64)
-      .to(filmInner, { scale: 1, duration: 1.8, ease: 'power3.out' }, 2.35);
+      .to(doorBg, { autoAlpha: 0, duration: 0.35, ease: 'power1.out' }, 0) // nothing between the doors and the page
+      // 1. the doors swing open, away from us, onto the invitation itself
+      .to(leafL, { rotationY: 82, duration: 1.4, ease: 'power2.inOut' }, 0.1)
+      .to(leafR, { rotationY: -82, duration: 1.4, ease: 'power2.inOut' }, 0.1)
+      .to('.leaf-shade', { opacity: 0.75, duration: 1.4, ease: 'power1.in' }, 0.1)
+      // 2. we step through: the frame grows past the screen edges and fades away
+      .to(doorZoom, { scale: 2.6, duration: 1.4, ease: 'power2.in' }, 0.95)
+      .to(door, { autoAlpha: 0, duration: 0.6, ease: 'power1.in' }, 1.75)
+      // 3. the page settles into place and starts from its first frame
+      .to(filmInner, { scale: 1, duration: 1.9, ease: 'power2.out' }, 0.9)
+      .add(goLive, 2.05);
   }
   function afterOpen() {
     cancelAnimationFrame(sparkRAF);
