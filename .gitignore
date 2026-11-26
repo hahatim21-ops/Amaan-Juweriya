@@ -1,6 +1,7 @@
 # local tooling
 .claude/
 .vercel/
+.env*
 # original full-size masters (the site uses assets/web/)
 assets/*.MP4
 assets/*.PNG
