@@ -1,6 +1,6 @@
 /* ==========================================================
    Amaan & Juwairiyah — Nikah & Walima
-   Vanilla JS · GSAP + ScrollTrigger · Lenis
+   Vanilla JS · GSAP · Lenis
    ========================================================== */
 (() => {
   'use strict';
@@ -15,8 +15,6 @@
     },
     music: { src: 'assets/web/song.mp3', volume: 0.8, fadeIn: 1.5 },
     door: { w: 941, h: 1672, medallionX: 0.50, medallionY: 0.53, doorwayX: 0.4995, doorwayY: 0.5553 },
-    // Scroll choreography, in viewport-heights of scroll
-    scroll: { hold: 1.0, trans: 0.55, lastHold: 1.35 },
   };
 
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -25,9 +23,6 @@
 
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   window.scrollTo(0, 0);
-
-  gsap.registerPlugin(ScrollTrigger);
-  ScrollTrigger.config({ ignoreMobileResize: true });
 
   const root = document.documentElement;
   const door = $('#door');
@@ -40,8 +35,7 @@
   const doorCta = $('.door-cta');
   const sparkCanvas = $('.door-sparkles');
   const flash = $('#flash');
-  const filmInner = $('.film-inner');
-  const track = $('#track');
+  const filmInner = $('#film');
   const scenes = $$('.scene');
   const videos = scenes.map((s) => $('video', s));
   const progressBar = $('#progress');
@@ -50,25 +44,23 @@
   const hint = $('.scroll-hint');
 
   /* ==========================================================
-     LENIS (smooth scroll) wired to ScrollTrigger
+     LENIS — one long, naturally scrolling column of pages
      ========================================================== */
   let lenis = null;
   if (!reduced && window.Lenis) {
-    lenis = new Lenis({ lerp: 0.08, smoothWheel: true });
-    lenis.on('scroll', ScrollTrigger.update);
+    lenis = new Lenis({ lerp: 0.085, smoothWheel: true });
     gsap.ticker.add((t) => lenis.raf(t * 1000));
     gsap.ticker.lagSmoothing(0);
     lenis.stop(); // locked until the door is opened
   }
 
   /* ==========================================================
-     VIDEO LOADING / PLAYBACK
-     The film is a stack of layers that are always inside the
-     viewport, so playback follows each layer's visibility
-     (computed from the scroll timeline) instead of geometry.
+     VIDEOS
+     Every page plays from its first frame when you arrive on it,
+     then loops. A page that is only peeking in waits on frame one.
      ========================================================== */
-  const vstate = videos.map((v, i) => ({ loaded: i === 0, visible: i === 0, opacity: i === 0 ? 1 : 0 }));
-  const posters = videos.map((v) => { const im = new Image(); im.src = v.poster; return im; });
+  const N = scenes.length;
+  const vstate = videos.map((v, i) => ({ loaded: i === 0, visible: i === 0, current: false }));
 
   function ensureLoaded(i) {
     const v = videos[i];
@@ -88,159 +80,69 @@
     const v = videos[i];
     if (!v.paused) v.pause();
   }
-  // every scene plays from its first frame when you arrive on it, then loops
-  function restartVideo(i) {
+  function rewind(i) {
     const v = videos[i];
+    if (!vstate[i].loaded) return;
+    try { if (v.currentTime > 0) v.currentTime = 0; } catch (e) { /* not seekable yet */ }
+  }
+  function restartVideo(i) {
     if (!vstate[i].loaded) ensureLoaded(i);
-    try { v.currentTime = 0; } catch (e) { /* not seekable yet: it starts at 0 anyway */ }
+    rewind(i);
     playVideo(i);
   }
 
   /* ==========================================================
-     MASTER SCROLL TIMELINE (one continuous film)
+     PAGE STATE (driven by scroll position)
      ========================================================== */
-  const { hold: H, trans: T, lastHold: L } = CONFIG.scroll;
-  const N = scenes.length;
-  const starts = scenes.map((_, i) => i * (H + T)); // when scene i is fully on screen
-  const TOTAL = starts[N - 1] + L;
-
-  track.style.height = `${(TOTAL + 1) * 100}vh`;
-
-  // "Blur veil": a live, low-res copy of the incoming video drawn into a tiny
-  // canvas and upscaled — it reads as a ~6px blur but costs only opacity to fade.
-  const veils = scenes.map((s, i) => {
-    if (i === 0 || reduced) return null;
-    const c = document.createElement('canvas');
-    c.className = 'veil';
-    c.setAttribute('aria-hidden', 'true');
-    c.width = 72; c.height = 128;
-    $('.stage', s).appendChild(c); // above the overlays, so they emerge from the blur too
-    return c;
-  });
-  function drawVeil(i) {
-    const c = veils[i];
-    if (!c) return;
-    const g = c.getContext('2d');
-    const v = videos[i];
-    try {
-      if (v.readyState >= 2) g.drawImage(v, 0, 0, c.width, c.height);
-      else if (posters[i].complete) g.drawImage(posters[i], 0, 0, c.width, c.height);
-    } catch (e) { /* ignore */ }
-  }
-
-  const tl = gsap.timeline({ paused: true, defaults: { ease: 'none' } });
-  tl.set({}, {}, TOTAL); // lock the timeline length
-
-  for (let i = 0; i < N - 1; i++) {
-    const t0 = starts[i] + H;
-    const cur = scenes[i];
-    const nxt = scenes[i + 1];
-    if (reduced) {
-      tl.fromTo(nxt, { autoAlpha: 0 }, { autoAlpha: 1, duration: T * 0.75 }, t0);
-      tl.to(cur, { autoAlpha: 0, duration: T * 0.6 }, t0 + T * 0.4);
-    } else {
-      // incoming (on top): opacity 0→1, scale 1.08→1, blur → sharp (veil fades)
-      tl.fromTo(nxt,
-        { autoAlpha: 0, scale: 1.08 },
-        { autoAlpha: 1, scale: 1, duration: T * 0.8, ease: 'power1.out' }, t0);
-      tl.fromTo(veils[i + 1], { opacity: 1 }, { opacity: 0, duration: T * 0.9, ease: 'power1.in' }, t0);
-      // outgoing (underneath): opacity 1→0, scale 1→0.96 — gone by the end of the window
-      tl.to(cur, { autoAlpha: 0, scale: 0.96, duration: T * 0.7, ease: 'power1.in' }, t0 + T * 0.3);
-    }
-  }
-
-  // gentle parallax drift (translateY ±3%) while each scene is on screen
-  if (!reduced) {
-    scenes.forEach((s, i) => {
-      const stage = $('.stage', s);
-      const from = i === 0 ? 0 : starts[i] - T;
-      const to = i === N - 1 ? TOTAL : starts[i] + H + T;
-      tl.fromTo(stage, { yPercent: i === 0 ? 0 : 3 }, { yPercent: -3, duration: to - from }, from);
-    });
-  }
-
-  // ending flourish at the very end of v6
+  const backdropLayers = $$('.backdrop > div');
   const ending = $('.ending');
-  tl.fromTo(ending, { autoAlpha: 0, y: reduced ? 0 : 18 },
-    { autoAlpha: 1, y: 0, duration: 0.4, ease: 'power1.out' }, TOTAL - 0.42);
+  let pagesLive = false; // becomes true as the doors finish opening
+  let currentPage = -1;
 
-  let lastDominant = -1;
-  function syncScenes() {
-    const time = tl.time();
-    let dominant = 0;
+  function syncPages() {
+    const vh = window.innerHeight;
+    let best = 0, bestCover = -1;
     for (let i = 0; i < N; i++) {
       const s = scenes[i];
-      const op = parseFloat(gsap.getProperty(s, 'opacity')) || 0;
-      const vis = op > 0.002 && getComputedStyleVisibility(s);
-      const entering = vis && !vstate[i].visible;
-      vstate[i].opacity = op;
-      vstate[i].visible = vis;
-      if (entering) restartVideo(i);
-      else if (vis) playVideo(i); else pauseVideo(i);
-      if (entering && i === 1) preloadClean();
-      if (vis && veils[i] && (parseFloat(gsap.getProperty(veils[i], 'opacity')) || 0) > 0.01) drawVeil(i);
-      if (op > 0.5) dominant = i; // later scenes sit on top
-      const end = starts[i] + (i === N - 1 ? L : H);
-      s.classList.toggle('is-settled', time >= starts[i] - T * 0.15 && time <= end + T * 0.1);
-      s.classList.toggle('is-on', vis && op > 0.5);
+      const r = s.getBoundingClientRect();
+      const visH = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+      const vis = visH > 1;
+      const cover = visH / Math.min(vh, r.height); // how much of it is on screen
+      const current = cover >= 0.55;
+      if (r.top < vh * 2.2) ensureLoaded(i); // lazy-load as it approaches
+      if (pagesLive) {
+        const st = vstate[i];
+        if (!vis) {
+          if (st.visible) { pauseVideo(i); rewind(i); } // gone: reset for next time
+        } else if (current && !st.current) {
+          if (videos[i].paused) restartVideo(i); // arrived: play from the start
+          if (i === 1) preloadClean();
+        } else if (!current && !st.current && videos[i].paused) {
+          rewind(i); // only peeking in: wait on the first frame
+        }
+        st.visible = vis;
+        st.current = current;
+      }
+      s.classList.toggle('is-settled', current);
+      if (cover > bestCover) { bestCover = cover; best = i; }
     }
-    if (dominant !== lastDominant) {
-      lastDominant = dominant;
-      ensureLoaded(dominant + 1); // lazy-load the next video as we approach it
+    if (best !== currentPage) {
+      currentPage = best;
+      backdropLayers.forEach((b, i) => b.classList.toggle('on', i === best));
     }
+    const max = document.documentElement.scrollHeight - vh;
+    const prog = max > 0 ? Math.min(1, window.scrollY / max) : 0;
+    progressFill.style.transform = `scaleY(${prog})`;
+    scenes[N - 1].classList.toggle('is-end', prog > 0.97);
   }
-  function getComputedStyleVisibility(el) { return el.style.visibility !== 'hidden'; }
 
-  tl.eventCallback('onUpdate', syncScenes);
-
-  const st = ScrollTrigger.create({
-    trigger: track,
-    start: 'top top',
-    end: 'bottom bottom',
-    animation: tl,
-    scrub: reduced ? true : 1,
-    onUpdate: (self) => gsap.set(progressFill, { scaleY: self.progress }),
-  });
-
-  /* ==========================================================
-     SHARED BLURRED BACKDROP
-     Draws whichever video(s) are on screen into a tiny canvas;
-     CSS blurs/darkens it. One decoder per video, no duplicates.
-     ========================================================== */
-  const bd = $('#backdrop');
-  const bctx = bd.getContext('2d', { alpha: false });
-  function sizeBackdrop() {
-    const w = 36;
-    bd.width = w;
-    bd.height = Math.max(16, Math.round((w * window.innerHeight) / window.innerWidth));
+  let syncQueued = false;
+  function queueSync() {
+    if (syncQueued) return;
+    syncQueued = true;
+    requestAnimationFrame(() => { syncQueued = false; syncPages(); });
   }
-  function drawCover(ctx, src, sw, sh, alpha) {
-    if (!sw || !sh) return;
-    const cw = ctx.canvas.width, ch = ctx.canvas.height;
-    const s = Math.max(cw / sw, ch / sh);
-    const w = sw * s, h = sh * s;
-    ctx.globalAlpha = alpha;
-    ctx.drawImage(src, (cw - w) / 2, (ch - h) / 2, w, h);
-  }
-  let bdLast = 0;
-  function drawBackdrop(time) {
-    if (time - bdLast < 1 / 24) return;
-    bdLast = time;
-    let first = true;
-    for (let i = 0; i < N; i++) {
-      if (!vstate[i].visible) continue;
-      const v = videos[i];
-      const a = first ? 1 : Math.min(1, vstate[i].opacity);
-      try {
-        if (v.readyState >= 2) drawCover(bctx, v, v.videoWidth, v.videoHeight, a);
-        else if (posters[i].complete) drawCover(bctx, posters[i], posters[i].naturalWidth, posters[i].naturalHeight, a);
-      } catch (e) { /* ignore draw errors */ }
-      first = false;
-    }
-    bctx.globalAlpha = 1;
-  }
-  sizeBackdrop();
-  gsap.ticker.add(drawBackdrop);
+  window.addEventListener('scroll', queueSync, { passive: true });
 
   /* ==========================================================
      DOOR — layout, sparkles, opening
@@ -336,12 +238,19 @@
     opened = true;
     door.setAttribute('aria-hidden', 'true');
     startMusic(); // inside the user gesture
-    restartVideo(0); // v2 starts from its first frame as we arrive
+    // v2 waits on its very first frame (which is also what the doorway shows)
+    // and only starts once the doors are out of the way.
+    const v2 = videos[0];
+    const unlock = v2.play(); // gesture-initiated play keeps iOS low-power mode happy
+    if (unlock && unlock.then) unlock.then(() => { if (!pagesLive) { v2.pause(); rewind(0); } }).catch(() => {});
+    v2.pause();
+    rewind(0);
     ensureLoaded(1);
+    const goLive = () => { pagesLive = true; vstate[0].current = false; syncPages(); };
 
     const tlo = gsap.timeline({ onComplete: afterOpen });
     if (reduced) {
-      tlo.to(door, { autoAlpha: 0, duration: 0.9, ease: 'power1.inOut' });
+      tlo.add(goLive, 0.3).to(door, { autoAlpha: 0, duration: 0.9, ease: 'power1.inOut' }, 0);
       return;
     }
     gsap.set(filmInner, { scale: 1.15, transformOrigin: '50% 50%' });
@@ -357,6 +266,7 @@
       .to(doorZoom, { scale: 5.5, duration: 1.6, ease: 'power3.in' }, 1.05)
       // 3. gold-white bloom, then cross-fade into v2 settling 1.15 → 1
       .to(flash, { opacity: 1, duration: 0.45, ease: 'power1.in' }, 2.15)
+      .add(goLive, 2.5) // v2 starts from frame one just as the bloom peaks
       .set(door, { autoAlpha: 0 }, 2.62)
       .to(flash, { opacity: 0, duration: 0.9, ease: 'power1.out' }, 2.64)
       .to(filmInner, { scale: 1, duration: 1.8, ease: 'power3.out' }, 2.35);
@@ -368,7 +278,7 @@
     gsap.set(filmInner, { clearProps: 'transform' });
     root.classList.remove('is-locked');
     if (lenis) lenis.start();
-    ScrollTrigger.refresh();
+    syncPages();
     musicBtn.classList.add('is-shown');
     gsap.to(musicBtn, { autoAlpha: 1, scale: 1, duration: 0.6, ease: 'back.out(2)' });
     progressBar.style.opacity = '1';
@@ -458,7 +368,8 @@
         if (actx && actx.state === 'suspended') actx.resume();
         audio.play().catch(() => {});
       }
-      syncScenes();
+      syncPages();
+      vstate.forEach((st, i) => { if (pagesLive && st.current) playVideo(i); });
     }
   });
 
@@ -716,7 +627,6 @@
             orig.pause();
             orig.style.visibility = 'hidden';
             videos[1] = cleanVid; // playback, backdrop & veil now follow the clean copy
-            posters[1] = Object.assign(new Image(), { src: cleanVid.poster });
           },
         });
       };
@@ -836,7 +746,7 @@
     clearTimeout(rzT);
     rzT = setTimeout(() => {
       layoutDoor();
-      sizeBackdrop();
+      syncPages();
       buildFoil();
     }, 120);
   });
@@ -848,11 +758,11 @@
   buildFoil();
   fontsReady.then(() => { buildFoil(); layoutDoor(); });
 
-  syncScenes();
+  syncPages();
 
   // expose for debugging
   window.__invite = {
-    tl, st, lenis, reveal, CONFIG, audio,
+    lenis, reveal, CONFIG, audio,
     get gain() { return gain ? gain.gain.value : audio.volume; },
   };
 })();

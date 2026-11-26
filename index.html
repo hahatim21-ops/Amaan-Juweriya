@@ -35,8 +35,14 @@
 </head>
 <body>
 
-  <!-- Shared blurred backdrop (fills the space around the 9:16 stage) -->
-  <canvas id="backdrop" aria-hidden="true"></canvas>
+  <!-- Blurred copy of the page you're on, filling the sides on wide screens -->
+  <div class="backdrop" aria-hidden="true">
+    <div class="on" style="background-image:url('assets/web/v2-blur.jpg')"></div>
+    <div style="background-image:url('assets/web/v3-blur.jpg')"></div>
+    <div style="background-image:url('assets/web/v4-blur.jpg')"></div>
+    <div style="background-image:url('assets/web/v5-blur.jpg')"></div>
+    <div style="background-image:url('assets/web/v6-blur.jpg')"></div>
+  </div>
 
   <!-- ============ PAGE 1 · TAP TO OPEN ============ -->
   <div id="door" role="button" tabindex="0" aria-label="Tap to open the invitation">
@@ -63,14 +69,14 @@
   </div>
   <div id="flash" aria-hidden="true"></div>
 
-  <!-- ============ THE FILM (fixed; driven by #track scroll) ============ -->
+  <!-- ============ THE FILM: one continuous column of 9:16 pages ============ -->
   <main id="film" aria-label="Wedding invitation">
-    <div class="film-inner">
+    <div class="col">
 
       <!-- v2 · Invitation -->
       <section class="scene" data-scene="0" aria-label="Invitation: Amaan and Juwairiyah">
         <div class="stage">
-          <video class="vid" muted playsinline loop autoplay preload="auto"
+          <video class="vid" muted playsinline loop preload="auto"
                  poster="assets/web/v2.jpg" src="assets/web/v2.mp4"></video>
           <div class="scroll-hint" aria-hidden="true">
             <span>Scroll</span>
@@ -143,9 +149,6 @@
     </div>
   </main>
 
-  <!-- Scroll length for the film -->
-  <div id="track" aria-hidden="true"></div>
-
   <!-- UI chrome -->
   <div id="progress" aria-hidden="true"><span></span></div>
   <button id="music" type="button" aria-label="Pause music" aria-pressed="true">
@@ -154,7 +157,6 @@
   </button>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
   <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
   <script src="main.js"></script>
 </body>

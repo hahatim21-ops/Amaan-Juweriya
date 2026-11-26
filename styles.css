@@ -42,17 +42,24 @@ html.is-locked, html.is-locked body { overflow: hidden; height: 100%; touch-acti
 img, video, canvas { display: block; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
 
-/* ---------- shared blurred backdrop ---------- */
-#backdrop {
+/* ---------- blurred copy of the current page (sides on wide screens) ---------- */
+.backdrop {
   position: fixed;
   inset: 0;
-  width: 100vw;
-  height: 100lvh;
   z-index: 0;
-  filter: blur(40px) brightness(.5);
-  transform: scale(1.25);
+  overflow: hidden;
   pointer-events: none;
 }
+.backdrop > div {
+  position: absolute;
+  inset: -8%;
+  background-size: cover;
+  background-position: center;
+  filter: brightness(.5);
+  opacity: 0;
+  transition: opacity .9s ease;
+}
+.backdrop > div.on { opacity: 1; }
 
 /* ==========================================================
    PAGE 1 · DOOR
@@ -286,60 +293,44 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 }
 
 /* ==========================================================
-   THE FILM
+   THE FILM — one continuous column of full-width 9:16 pages.
+   Pages scroll naturally; each one tucks under the previous by a
+   small "seam" that is feathered with a mask, so the joins melt.
    ========================================================== */
 #film {
-  position: fixed;
-  inset: 0;
-  height: 100lvh;
+  position: relative;
   z-index: 1;
-  overflow: hidden;
-  pointer-events: none;
 }
-.film-inner {
-  position: absolute;
-  inset: 0;
-  will-change: transform;
+.col {
+  --col: min(100vw, 520px);
+  --seam: calc(var(--col) * .13);
+  position: relative;
+  width: var(--col);
+  margin: 0 auto;
+  background: var(--midnight);
+  box-shadow: 0 0 70px rgba(5, 8, 20, .55);
 }
-
-#track { position: relative; z-index: 0; height: 720vh; }
 
 .scene {
-  position: absolute;
-  top: 0;
-  left: 0;
+  position: relative;
+  display: block;
   width: 100%;
-  height: 100svh;
-  visibility: hidden;
-  opacity: 0;
-  will-change: transform, opacity;
-}
-.scene[data-scene="0"] { visibility: visible; opacity: 1; }
-.scene.is-on { pointer-events: auto; }
-
-.stage {
-  /* centred without transforms — GSAP owns .stage's transform (parallax) */
-  position: absolute;
-  inset: 0;
-  margin: auto;
-  width: var(--stage-w);
-  height: calc(var(--stage-w) * 16 / 9);
-  container-type: size;
+  aspect-ratio: 9 / 16;
   overflow: hidden;
+  isolation: isolate;
   background: var(--midnight);
 }
-/* Feather the stage edge into the blurred backdrop */
-@media (max-aspect-ratio: 9/16) {
-  .stage {
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 2.2%, #000 97.8%, transparent 100%);
-            mask-image: linear-gradient(to bottom, transparent 0, #000 2.2%, #000 97.8%, transparent 100%);
-  }
+.scene + .scene {
+  margin-top: calc(-1 * var(--seam));
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, .12) calc(var(--seam) * .2), rgba(0, 0, 0, .45) calc(var(--seam) * .45), rgba(0, 0, 0, .82) calc(var(--seam) * .72), #000 var(--seam));
+          mask-image: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, .12) calc(var(--seam) * .2), rgba(0, 0, 0, .45) calc(var(--seam) * .45), rgba(0, 0, 0, .82) calc(var(--seam) * .72), #000 var(--seam));
 }
-@media (min-aspect-ratio: 9/16) {
-  .stage {
-    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 3.5%, #000 96.5%, transparent 100%);
-            mask-image: linear-gradient(to right, transparent 0, #000 3.5%, #000 96.5%, transparent 100%);
-  }
+
+.stage {
+  position: absolute;
+  inset: 0;
+  container-type: size;
+  overflow: hidden;
 }
 
 .vid {
@@ -347,7 +338,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover; /* stage is exactly 9:16, so nothing is cropped */
+  object-fit: cover; /* the page is exactly 9:16, so nothing is cropped */
 }
 .vid-clean {
   position: absolute;
@@ -359,22 +350,11 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   visibility: hidden;
 }
 
-/* soft-focus veil used during cross-fades (opacity-only "blur") */
-.veil {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 6;
-  opacity: 0;
-  pointer-events: none;
-}
-
 /* ---------- scroll hint (v2) ---------- */
 .scroll-hint {
   position: absolute;
   left: 50%;
-  bottom: 4%;
+  bottom: 10%;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
@@ -471,8 +451,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   position: absolute;
   left: 5%;
   width: 90%;
-  top: 79%;
-  height: 14%;
+  top: 76.5%;
+  height: 13.5%;
   z-index: 3;
   display: flex;
   align-items: center;
@@ -628,6 +608,14 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   gap: 1.6cqh;
   opacity: 0;
   visibility: hidden;
+  transform: translateY(16px);
+  transition: opacity .8s ease, transform .8s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .8s;
+}
+.scene.is-end .ending {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity .8s ease, transform .8s cubic-bezier(.2, .8, .2, 1), visibility 0s;
 }
 .ending::before {
   /* soft dusk halo so the gold reads over the lit path */
