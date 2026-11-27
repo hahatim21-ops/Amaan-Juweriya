@@ -117,10 +117,9 @@
       if (pagesLive) {
         const st = vstate[i];
         if (!vis) {
-          if (st.visible) { pauseVideo(i); rewind(i); } // gone: reset for next time
+          if (st.visible) { pauseVideo(i); rewind(i); hideLines(i); } // gone: reset for next time
         } else if (current && !st.current) {
-          if (videos[i].paused) restartVideo(i); // arrived: play from the start
-          if (i === 1) preloadClean();
+          if (videos[i].paused) { restartVideo(i); showLines(i); } // arrived: play from the start, text appears
         } else if (!current && !st.current && videos[i].paused) {
           rewind(i); // only peeking in: wait on the first frame
         }
@@ -138,6 +137,25 @@
     const prog = max > 0 ? Math.min(1, window.scrollY / max) : 0;
     progressFill.style.transform = `scaleY(${prog})`;
     scenes[N - 1].classList.toggle('is-end', prog > 0.97);
+  }
+
+  /* ---------- text lines: one after another, as each page arrives ---------- */
+  const pageLines = scenes.map((s) => $$('.tl', s));
+  function showLines(i) {
+    const ls = pageLines[i].filter((el) => !(revealed && el.hasAttribute('data-scratch-line')));
+    if (!ls.length) return;
+    gsap.killTweensOf(ls);
+    if (reduced) {
+      gsap.to(ls, { opacity: 1, duration: 0.6, stagger: 0.15 });
+      return;
+    }
+    gsap.fromTo(ls,
+      { opacity: 0, y: 14, filter: 'blur(8px)' },
+      { opacity: 1, y: 0, filter: 'blur(0px)', duration: 0.95, ease: 'power2.out', stagger: 0.3, delay: 0.25, clearProps: 'filter,transform' });
+  }
+  function hideLines(i) {
+    gsap.killTweensOf(pageLines[i]);
+    gsap.set(pageLines[i], { opacity: 0, clearProps: 'filter,transform' });
   }
 
   let syncQueued = false;
@@ -240,7 +258,7 @@
   // started from a tap. Start every video once inside the door tap, then
   // park it on frame one; from then on JS may play it whenever we like.
   function unlockVideos() {
-    const all = videos.map((v, i) => [v, i]).concat([[cleanVid, -1]]);
+    const all = videos.map((v, i) => [v, i]);
     all.forEach(([v, i]) => {
       if (i > 0 && !vstate[i].loaded) {
         vstate[i].loaded = true;
@@ -248,13 +266,12 @@
         v.preload = 'metadata';
         v.src = v.dataset.src;
       }
-      if (i === -1 && !v.src) { v.preload = 'metadata'; v.src = v.dataset.src; }
       if (i === 0) return; // v2 is handled by the door sequence
       const p = v.play();
       if (p && p.then) {
         p.then(() => {
           const wanted = i > 0 && pagesLive && vstate[i].current;
-          if (!wanted && !(i === -1 && cleanSwapped)) { v.pause(); try { v.currentTime = 0; } catch (e) {} }
+          if (!wanted) { v.pause(); try { v.currentTime = 0; } catch (e) {} }
         }).catch(() => {});
       }
     });
@@ -428,140 +445,232 @@
   window.addEventListener('scroll', onFirstScroll, { passive: true });
 
   /* ==========================================================
-     DATE REVEAL (v3) — a velvet ribbon held by a gold wax seal.
-     Tap the seal (or swipe the ribbon): the seal breaks away in a
-     burst of gold and the ribbon parts like the doors, revealing
-     the date underneath.
+     DATE REVEAL (v3) — scratch the velvet ribbon to reveal the date.
+     The ribbon is drawn on a canvas; scratching erases it with a
+     soft brush (gold sparkles follow your finger). Once about 45%
+     is cleared, the rest dissolves in a burst of gold.
      ========================================================== */
   const scene3 = scenes[1];
-  const sealBand = $('.seal-band', scene3);
-  const ribbonL = $('.ribbon-l', scene3);
-  const ribbonR = $('.ribbon-r', scene3);
-  const seal = $('.seal', scene3);
+  const scratchWrap = $('.scratch', scene3);
+  const sc = $('.scratch-canvas', scene3);
+  const sctx2 = sc.getContext('2d');
+  const scratchHint = $('.scratch-hint', scene3);
   const burstBox = $('.foil-burst', scene3);
   const dateGlow = $('.date-glow', scene3);
   const countdown = $('.countdown', scene3);
+  const scratchLine = $('.tl[data-scratch-line]', scene3); // the "Scratch to reveal the Date!" text
   let revealed = false;
+  let rBase = null, rMask = null, rMctx = null, rW = 0, rH = 0, rDpr = 1;
 
-  // tap → reveal; a horizontal swipe across the ribbon also opens it
-  let sDown = null;
-  sealBand.addEventListener('pointerdown', (e) => {
+  function buildRibbon() {
+    const r = sc.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    rDpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.round(r.width * rDpr), h = Math.round(r.height * rDpr);
+    const keepMask = rMask && rMask.width === w && rMask.height === h;
+    rW = w; rH = h;
+    sc.width = w; sc.height = h;
+
+    rBase = document.createElement('canvas');
+    rBase.width = w; rBase.height = h;
+    const g = rBase.getContext('2d');
+    // velvet
+    const vg = g.createLinearGradient(0, 0, 0, h);
+    vg.addColorStop(0, '#7A141D');
+    vg.addColorStop(0.5, '#560B13');
+    vg.addColorStop(1, '#34060B');
+    g.fillStyle = vg;
+    g.fillRect(0, 0, w, h);
+    const sh = g.createLinearGradient(0, 0, 0, h);
+    sh.addColorStop(0, 'rgba(255,225,225,.16)');
+    sh.addColorStop(0.4, 'rgba(255,255,255,0)');
+    sh.addColorStop(1, 'rgba(0,0,0,.25)');
+    g.fillStyle = sh;
+    g.fillRect(0, 0, w, h);
+    // velvet nap
+    g.globalAlpha = 0.05;
+    g.strokeStyle = '#fff';
+    g.lineWidth = Math.max(1, rDpr * 0.6);
+    for (let x = -h; x < w; x += 4 * rDpr) { g.beginPath(); g.moveTo(x, h); g.lineTo(x + h * 0.6, 0); g.stroke(); }
+    g.globalAlpha = 1;
+    // gold borders: outer bands + inner hairlines
+    const gold = g.createLinearGradient(0, 0, w, 0);
+    gold.addColorStop(0, '#A87C22'); gold.addColorStop(0.25, '#E9CF7A'); gold.addColorStop(0.5, '#F5E6A8');
+    gold.addColorStop(0.75, '#D4AF37'); gold.addColorStop(1, '#A87C22');
+    const bw = Math.max(2, Math.round(2 * rDpr));
+    g.fillStyle = gold;
+    g.fillRect(0, 0, w, bw); g.fillRect(0, h - bw, w, bw);
+    g.globalAlpha = 0.75;
+    g.fillRect(0, Math.round(h * 0.15), w, Math.max(1, rDpr * 0.8));
+    g.fillRect(0, Math.round(h * 0.85), w, Math.max(1, rDpr * 0.8));
+    g.globalAlpha = 1;
+    // label
+    const fs = Math.round(h * 0.3);
+    g.font = `600 ${fs}px Cinzel, "Times New Roman", serif`;
+    if ('letterSpacing' in g) g.letterSpacing = `${Math.round(fs * 0.22)}px`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    const label = '✦   Scratch to Reveal   ✦';
+    const tw = g.measureText(label).width;
+    const tg = g.createLinearGradient(w / 2 - tw / 2, 0, w / 2 + tw / 2, 0);
+    tg.addColorStop(0, '#B8892A'); tg.addColorStop(0.3, '#F5E6A8'); tg.addColorStop(0.55, '#D4AF37');
+    tg.addColorStop(0.8, '#F5E6A8'); tg.addColorStop(1, '#B8892A');
+    g.fillStyle = 'rgba(20,2,6,.6)';
+    g.fillText(label, w / 2, h / 2 + fs * 0.08 + rDpr);
+    g.fillStyle = tg;
+    g.fillText(label, w / 2, h / 2 + fs * 0.08);
+
+    if (!keepMask) {
+      rMask = document.createElement('canvas');
+      rMask.width = w; rMask.height = h;
+      rMctx = rMask.getContext('2d', { willReadFrequently: true });
+      rMctx.fillStyle = '#000';
+      rMctx.fillRect(0, 0, w, h);
+    }
+    renderRibbon(performance.now());
+  }
+
+  function renderRibbon(now) {
+    if (!rBase) return;
+    const w = rW, h = rH;
+    sctx2.globalCompositeOperation = 'source-over';
+    sctx2.clearRect(0, 0, w, h);
+    sctx2.drawImage(rBase, 0, 0);
+    // a soft sheen gliding across the velvet
+    sctx2.globalCompositeOperation = 'source-atop';
+    const p = reduced ? 0.5 : ((now % 4200) / 4200) * 1.8 - 0.4;
+    const sx = p * w, sw = w * 0.2;
+    const sg = sctx2.createLinearGradient(sx - sw, 0, sx + sw, h);
+    sg.addColorStop(0, 'rgba(255,230,190,0)');
+    sg.addColorStop(0.5, 'rgba(255,230,190,.22)');
+    sg.addColorStop(1, 'rgba(255,230,190,0)');
+    sctx2.fillStyle = sg;
+    sctx2.fillRect(0, 0, w, h);
+    sctx2.globalCompositeOperation = 'destination-in';
+    sctx2.drawImage(rMask, 0, 0);
+    sctx2.globalCompositeOperation = 'source-over';
+  }
+
+  gsap.ticker.add(() => {
+    if (!rBase || revealed || !vstate[1].visible) return;
+    renderRibbon(performance.now());
+  });
+
+  // pointer scratching
+  let rDown = false, rLast = null, rMoved = 0, lastCheck = 0, lastSpark = 0;
+  const rPoint = (e) => {
+    const r = sc.getBoundingClientRect();
+    return { x: ((e.clientX - r.left) / r.width) * rW, y: ((e.clientY - r.top) / r.height) * rH, cx: e.clientX - r.left, cy: e.clientY - r.top };
+  };
+  function scratchTo(a, b) {
+    rMctx.globalCompositeOperation = 'destination-out';
+    rMctx.lineCap = 'round';
+    rMctx.lineJoin = 'round';
+    rMctx.lineWidth = rH * 0.95;
+    rMctx.beginPath();
+    rMctx.moveTo(a.x, a.y);
+    rMctx.lineTo(b.x, b.y);
+    rMctx.stroke();
+  }
+  function clearedRatio() {
+    const { data } = rMctx.getImageData(0, 0, rW, rH);
+    let clear = 0, total = 0;
+    for (let k = 3; k < data.length; k += 4 * 9) { total++; if (data[k] < 128) clear++; }
+    return total ? clear / total : 0;
+  }
+  function sparkAt(x, y) {
+    if (reduced) return;
+    const el = document.createElement('i');
+    burstBox.appendChild(el);
+    const bb = burstBox.getBoundingClientRect(), sr = sc.getBoundingClientRect();
+    const px = x + (sr.left - bb.left), py = y + (sr.top - bb.top);
+    gsap.fromTo(el, { x: px, y: py, scale: 0.6 + Math.random(), opacity: 1 },
+      { x: px + (Math.random() - 0.5) * 40, y: py - 10 - Math.random() * 26, scale: 0, opacity: 0,
+        duration: 0.6 + Math.random() * 0.4, ease: 'power2.out', onComplete: () => el.remove() });
+  }
+  sc.addEventListener('pointerdown', (e) => {
     if (revealed) return;
-    sDown = { x: e.clientX, y: e.clientY };
+    rDown = true; rMoved = 0;
+    rLast = rPoint(e);
+    try { sc.setPointerCapture(e.pointerId); } catch (_) {}
+    scratchHint.classList.add('is-gone');
   });
-  sealBand.addEventListener('pointermove', (e) => {
-    if (!sDown || revealed) return;
-    if (Math.abs(e.clientX - sDown.x) > 28) { sDown = null; reveal(); }
+  sc.addEventListener('pointermove', (e) => {
+    if (!rDown || revealed) return;
+    const p = rPoint(e);
+    rMoved += Math.hypot(p.x - rLast.x, p.y - rLast.y) / rDpr;
+    scratchTo(rLast, p);
+    rLast = p;
+    const now = performance.now();
+    if (now - lastSpark > 35) { lastSpark = now; sparkAt(p.cx, p.cy); }
+    if (now - lastCheck > 120) {
+      lastCheck = now;
+      if (clearedRatio() >= 0.45) reveal();
+    }
   });
-  sealBand.addEventListener('pointerup', (e) => {
-    if (!sDown || revealed) return;
-    const moved = Math.hypot(e.clientX - sDown.x, e.clientY - sDown.y);
-    sDown = null;
-    if (moved < 14) reveal(); // a tap, not a scroll
-  });
-  sealBand.addEventListener('pointercancel', () => { sDown = null; });
-  sealBand.addEventListener('keydown', (e) => {
+  const rEnd = () => {
+    if (!rDown) return;
+    rDown = false;
+    if (revealed) return;
+    if (rMoved < 6) {
+      // a tap: nudge them to scratch
+      scratchHint.classList.remove('is-gone');
+      gsap.fromTo(sc, { x: -5 }, { x: 0, duration: 0.5, ease: 'elastic.out(1.2, 0.3)' });
+    } else if (clearedRatio() >= 0.45) reveal();
+  };
+  sc.addEventListener('pointerup', rEnd);
+  sc.addEventListener('pointercancel', () => { rDown = false; });
+  sc.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); reveal(); }
   });
 
   function burst() {
     if (reduced) return;
     const r = burstBox.getBoundingClientRect();
-    const cx = r.width / 2, cy = r.height / 2;
     const frag = document.createDocumentFragment();
     const parts = [];
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 56; i++) {
       const el = document.createElement('i');
       frag.appendChild(el);
       parts.push(el);
     }
     burstBox.appendChild(frag);
-    parts.forEach((el, i) => {
-      // most of the gold dust bursts from the seal, the rest along the parting ribbon
-      const fromSeal = i < 38;
-      const x0 = fromSeal ? cx + (Math.random() - 0.5) * r.height * 0.6 : Math.random() * r.width;
-      const y0 = fromSeal ? cy + (Math.random() - 0.5) * r.height * 0.6 : r.height * (0.25 + Math.random() * 0.5);
+    parts.forEach((el) => {
+      const x0 = Math.random() * r.width;
+      const y0 = r.height * (0.2 + Math.random() * 0.6);
       const ang = Math.random() * Math.PI * 2;
-      const dist = (fromSeal ? 40 : 20) + Math.random() * r.width * (fromSeal ? 0.3 : 0.12);
+      const dist = 26 + Math.random() * r.width * 0.28;
       gsap.fromTo(el,
         { x: x0, y: y0, scale: 0.6 + Math.random() * 1.8, opacity: 1 },
-        {
-          x: x0 + Math.cos(ang) * dist,
-          y: y0 + Math.sin(ang) * dist * 0.7 - 8,
-          scale: 0,
-          opacity: 0,
-          duration: 0.9 + Math.random() * 0.8,
-          ease: 'power2.out',
-          onComplete: () => el.remove(),
-        });
+        { x: x0 + Math.cos(ang) * dist, y: y0 + Math.sin(ang) * dist * 0.7 - 8, scale: 0, opacity: 0,
+          duration: 0.9 + Math.random() * 0.7, ease: 'power2.out', onComplete: () => el.remove() });
     });
-  }
-
-  // After the reveal, v3 is swapped for an identical copy without the
-  // "Scratch to reveal the Date!" line, so it never comes back on loop.
-  const cleanVid = $('.vid-clean', scene3);
-  let cleanSwapped = false;
-  function preloadClean() {
-    cleanVid.preload = 'auto';
-    if (cleanVid.src) return;
-    cleanVid.src = cleanVid.dataset.src;
-    cleanVid.load();
-  }
-  function swapToClean() {
-    if (cleanSwapped) return;
-    cleanSwapped = true;
-    preloadClean();
-    const orig = videos[1];
-    const go = () => {
-      const p = cleanVid.play();
-      const fade = () => {
-        gsap.to(cleanVid, {
-          autoAlpha: 1, duration: 0.6, ease: 'power1.inOut',
-          onComplete: () => {
-            orig.pause();
-            orig.style.visibility = 'hidden';
-            videos[1] = cleanVid; // playback now follows the clean copy
-          },
-        });
-      };
-      if (p && p.then) p.then(fade).catch(fade); else fade();
-    };
-    const sync = () => {
-      try { cleanVid.currentTime = (orig.currentTime + 0.05) % (cleanVid.duration || 10); } catch (e) {}
-      if (cleanVid.seeking) cleanVid.addEventListener('seeked', go, { once: true }); else go();
-    };
-    if (cleanVid.readyState >= 1) sync();
-    else cleanVid.addEventListener('loadedmetadata', sync, { once: true });
   }
 
   function reveal() {
     if (revealed) return;
     revealed = true;
+    rDown = false;
     scene3.classList.add('revealed');
-    swapToClean();
-    sealBand.setAttribute('aria-label', 'Date revealed: 18 and 20 December 2026');
-    const done = () => sealBand.classList.add('is-gone');
+    scratchHint.classList.add('is-gone');
+    sc.setAttribute('aria-label', 'Date revealed: 18 and 20 December 2026');
+    // the "Scratch to reveal the Date!" line is no longer needed
+    if (scratchLine) gsap.to(scratchLine, { opacity: 0, duration: 0.8, ease: 'power1.out', overwrite: true });
+    const done = () => scratchWrap.classList.add('is-gone');
     const tlr = gsap.timeline();
     if (reduced) {
-      tlr.to(sealBand, { autoAlpha: 0, duration: 0.6 })
-        .add(done)
+      tlr.to(sc, { autoAlpha: 0, duration: 0.6 }).add(done)
         .to(dateGlow, { opacity: 0.8, duration: 0.8 }, 0.2)
         .add(showCountdown, 0.5);
       return;
     }
     tlr
-      // the seal swells, then breaks away in a burst of gold
-      .to(seal, { scale: 1.18, duration: 0.22, ease: 'power2.out' })
-      .add(burst, 0.2)
-      .to(seal, { scale: 0.2, rotation: 35, autoAlpha: 0, duration: 0.45, ease: 'power2.in' }, 0.22)
-      // the ribbon parts like the doors
-      .to(ribbonL, { xPercent: -104, duration: 1.05, ease: 'power3.inOut' }, 0.3)
-      .to(ribbonR, { xPercent: 104, duration: 1.05, ease: 'power3.inOut' }, 0.3)
-      .to([ribbonL, ribbonR], { autoAlpha: 0, duration: 0.35, ease: 'power1.in' }, 1.0)
-      .add(done, 1.4)
-      .fromTo(dateGlow, { opacity: 0 }, { opacity: 0.85, duration: 1.1, ease: 'power1.out' }, 0.55)
-      .add(() => gsap.set(dateGlow, { clearProps: 'opacity' }), 1.7)
-      .add(showCountdown, 1.0);
+      .add(burst, 0)
+      .to(sc, { scale: 1.06, autoAlpha: 0, duration: 0.7, ease: 'power2.out' }, 0)
+      .add(done, 0.75)
+      .fromTo(dateGlow, { opacity: 0 }, { opacity: 0.85, duration: 1.1, ease: 'power1.out' }, 0.2)
+      .add(() => gsap.set(dateGlow, { clearProps: 'opacity' }), 1.4)
+      .add(showCountdown, 0.6);
   }
 
   /* ==========================================================
@@ -645,6 +754,7 @@
     clearTimeout(rzT);
     rzT = setTimeout(() => {
       layoutDoor();
+      buildRibbon();
       syncPages();
     }, 120);
   });
@@ -653,7 +763,8 @@
   const fontsReady = document.fonts && document.fonts.load
     ? Promise.all([document.fonts.load('700 20px Cinzel'), document.fonts.ready]).catch(() => {})
     : Promise.resolve();
-  fontsReady.then(() => { layoutDoor(); });
+  buildRibbon();
+  fontsReady.then(() => { buildRibbon(); layoutDoor(); });
 
   syncPages();
 
