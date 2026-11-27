@@ -7,8 +7,6 @@
 
   /* ---------------- CONFIG ---------------- */
   const CONFIG = {
-    // Countdown target: Nikah, 18 Dec 2026, 16:30 IST (Asia/Kolkata, +05:30)
-    nikahAt: '2026-12-18T16:30:00+05:30',
     maps: {
       nikah: 'https://www.google.com/maps/search/?api=1&query=Race+Course+Masjid+Mahalaxmi+Mumbai',
       walima: 'https://www.google.com/maps/search/?api=1&query=Bayview+Lawns+Princess+Dock+Mazgaon+Mumbai',
@@ -457,7 +455,6 @@
   const scratchHint = $('.scratch-hint', scene3);
   const burstBox = $('.foil-burst', scene3);
   const dateGlow = $('.date-glow', scene3);
-  const countdown = $('.countdown', scene3);
   const scratchLine = $('.tl[data-scratch-line]', scene3); // the "Scratch to reveal the Date!" text
   let revealed = false;
   let rBase = null, rMask = null, rMctx = null, rW = 0, rH = 0, rDpr = 1;
@@ -660,8 +657,7 @@
     const tlr = gsap.timeline();
     if (reduced) {
       tlr.to(sc, { autoAlpha: 0, duration: 0.6 }).add(done)
-        .to(dateGlow, { opacity: 0.8, duration: 0.8 }, 0.2)
-        .add(showCountdown, 0.5);
+        .to(dateGlow, { opacity: 0.8, duration: 0.8 }, 0.2);
       return;
     }
     tlr
@@ -669,57 +665,7 @@
       .to(sc, { scale: 1.06, autoAlpha: 0, duration: 0.7, ease: 'power2.out' }, 0)
       .add(done, 0.75)
       .fromTo(dateGlow, { opacity: 0 }, { opacity: 0.85, duration: 1.1, ease: 'power1.out' }, 0.2)
-      .add(() => gsap.set(dateGlow, { clearProps: 'opacity' }), 1.4)
-      .add(showCountdown, 0.6);
-  }
-
-  /* ==========================================================
-     COUNTDOWN
-     ========================================================== */
-  const target = new Date(CONFIG.nikahAt).getTime();
-  const cdNums = { d: $('[data-unit="d"]', countdown), h: $('[data-unit="h"]', countdown), m: $('[data-unit="m"]', countdown), s: $('[data-unit="s"]', countdown) };
-  const cdPrev = { d: '', h: '', m: '', s: '' };
-  let cdShown = false, cdTimer = 0;
-
-  function setUnit(key, txt) {
-    if (cdPrev[key] === txt) return;
-    cdPrev[key] = txt;
-    const el = cdNums[key];
-    const spans = el.querySelectorAll('span');
-    const old = spans[spans.length - 1];
-    if (!cdShown || reduced || !vstate[1].visible) {
-      spans.forEach((s, i) => { if (i < spans.length - 1) s.remove(); });
-      old.textContent = txt;
-      return;
-    }
-    const nu = document.createElement('span');
-    nu.textContent = txt;
-    el.appendChild(nu);
-    gsap.fromTo(nu, { yPercent: 90, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 0.55, ease: 'power3.out' });
-    gsap.to(old, { yPercent: -90, opacity: 0, duration: 0.55, ease: 'power3.out', onComplete: () => old.remove() });
-  }
-  const pad = (n) => String(n).padStart(2, '0');
-  function tick() {
-    const diff = target - Date.now();
-    if (diff <= 0) {
-      countdown.classList.add('is-done');
-      clearInterval(cdTimer);
-      return;
-    }
-    const s = Math.floor(diff / 1000);
-    setUnit('d', pad(Math.floor(s / 86400)));
-    setUnit('h', pad(Math.floor((s % 86400) / 3600)));
-    setUnit('m', pad(Math.floor((s % 3600) / 60)));
-    setUnit('s', pad(s % 60));
-  }
-  tick();
-  cdTimer = setInterval(tick, 1000);
-
-  function showCountdown() {
-    gsap.to(countdown, {
-      autoAlpha: 1, y: 0, duration: reduced ? 0.6 : 1.1, ease: 'power3.out',
-      onComplete: () => { cdShown = true; },
-    });
+      .add(() => gsap.set(dateGlow, { clearProps: 'opacity' }), 1.4);
   }
 
   /* ==========================================================
